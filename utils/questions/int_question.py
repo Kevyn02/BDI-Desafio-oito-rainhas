@@ -13,8 +13,13 @@ def int_question(
     default_value: int | None = None,
     invalid_message: str | None = None,
 ):
-    message = stylize_text(content, Styles.UNDERLINE, TextColors.CYAN)
-    value = input(f"{message} ")
+    info_message = stylize_text(content, Styles.UNDERLINE, TextColors.CYAN)
+    danger_message = stylize_text(
+        "" if invalid_message is None or invalid_message == "" else invalid_message,
+        Styles.UNDERLINE,
+        TextColors.RED,
+    )
+    value = input(f"{info_message} ")
 
     while True:
         if value is None or value == "":
@@ -27,24 +32,17 @@ def int_question(
             try:
                 num = float(value)
             except ValueError:
-                value = input(
-                    f"{stylize_text(invalid_message, Styles.UNDERLINE, TextColors.RED)} "
-                )
+                value = input(f"{danger_message} {info_message} ")
                 continue
 
             min_v = allowed_values.get("min")
             max_v = allowed_values.get("max")
 
-            if min_v is not None and num < min_v:
-                value = input(
-                    f"{stylize_text(invalid_message, Styles.UNDERLINE, TextColors.RED)} "
-                )
-                continue
+            is_the_value_lower_than_min = min_v is not None and num < min_v
+            is_the_value_greater_than_max = max_v is not None and num > max_v
 
-            if max_v is not None and num > max_v:
-                value = input(
-                    f"{stylize_text(invalid_message, Styles.UNDERLINE, TextColors.RED)} "
-                )
+            if is_the_value_lower_than_min or is_the_value_greater_than_max:
+                value = input(f"{danger_message} {info_message} ")
                 continue
 
             return int(num)
@@ -52,4 +50,4 @@ def int_question(
         if value in allowed_values:
             return int(value)
 
-        value = stylize_text(invalid_message, Styles.UNDERLINE, TextColors.RED)
+        value = input(f"{danger_message} {info_message} ")
