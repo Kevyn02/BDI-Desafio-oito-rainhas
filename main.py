@@ -83,37 +83,63 @@ def mostrar_tabuleiro(tabuleiro, qtd_colunas, log):
 
 
 # ================= REGRAS =================
-def verifica_colisao_linha(tabuleiro, linha):
-    return "R" not in tabuleiro[linha]
+def verifica_conteudo(tabuleiro, linha, coluna, log, nivel):
+    resultado = tabuleiro[linha][coluna] != "-"
+    texto_log = (
+        f"❌ Ocupado ({linha+1},{coluna+1})"
+        if resultado
+        else f"✅ Livre ({linha+1},{coluna+1})"
+    )
+    log_debug(log, texto_log, nivel)
+    return resultado
 
 
-def verifica_colisao_coluna(tabuleiro, coluna):
+def verifica_colisao_linha(tabuleiro, linha, log, nivel):
+    resultado = "R" in tabuleiro[linha]
+    texto_log = (
+        f"❌ Falha linha {linha+1}" if resultado else f"✅ Válido linha {linha+1}"
+    )
+    log_debug(log, texto_log, nivel)
+
+    return resultado
+
+
+def verifica_colisao_coluna(tabuleiro, coluna, log, nivel):
     valores_coluna = [linha[coluna] for linha in tabuleiro]
-    return "R" not in valores_coluna
+    resultado = "R" in valores_coluna
+    texto_log = (
+        f"❌ Falha coluna {coluna+1}" if resultado else f"✅ Válido coluna {coluna+1}"
+    )
+    log_debug(log, texto_log, nivel)
+    return resultado
 
 
-def verifica_colisao_diagonal(rainhas_posicionadas, linha, coluna):
+def verifica_colisao_diagonal(rainhas_posicionadas, linha, coluna, log, nivel):
+    resultado = False
     for r_linha, r_coluna in rainhas_posicionadas:
         if abs(r_linha - linha) == abs(r_coluna - coluna):
-            return False
-    return True
+            resultado = True
+    texto_log = (
+        f"❌ Falha diagonal ({linha+1},{coluna+1})"
+        if resultado
+        else f"✅ Válido diagonal ({linha+1},{coluna+1})"
+    )
+    log_debug(log, texto_log, nivel)
+
+    return resultado
 
 
 def pode_posicionar(tabuleiro, rainhas_posicionadas, linha, coluna, log, nivel):
-    if tabuleiro[linha][coluna] != "-":
-        log_debug(log, f"❌ Ocupado ({linha+1},{coluna+1})", nivel)
+    if verifica_conteudo(tabuleiro, linha, coluna, log, nivel):
         return False
 
-    if not verifica_colisao_linha(tabuleiro, linha):
-        log_debug(log, f"❌ Falha linha {linha+1}", nivel)
+    if verifica_colisao_linha(tabuleiro, linha, log, nivel):
         return False
 
-    if not verifica_colisao_coluna(tabuleiro, coluna):
-        log_debug(log, f"❌ Falha coluna {coluna+1}", nivel)
+    if verifica_colisao_coluna(tabuleiro, coluna, log, nivel):
         return False
 
-    if not verifica_colisao_diagonal(rainhas_posicionadas, linha, coluna):
-        log_debug(log, f"❌ Falha diagonal ({linha+1},{coluna+1})", nivel)
+    if verifica_colisao_diagonal(rainhas_posicionadas, linha, coluna, log, nivel):
         return False
 
     log_debug(log, f"✅ Válido ({linha+1},{coluna+1})", nivel)
@@ -146,7 +172,16 @@ def posicionar_rainhas(
             return False
 
         for linha in range(qtd_linhas):
+            if rainhas_posicionadas and verifica_colisao_linha(
+                tabuleiro, linha, log, nivel
+            ):
+                continue
+
             for coluna in range(qtd_colunas):
+                if rainhas_posicionadas and verifica_colisao_coluna(
+                    tabuleiro, coluna, log, nivel
+                ):
+                    continue
 
                 if pode_posicionar(
                     tabuleiro,
@@ -197,13 +232,13 @@ def mostrar_resultados(resultados, qtd_linhas, qtd_colunas, log):
 # ================= MAIN =================
 def main():
     modo_debug = select_question(
-        content="Modo debug completo? (s/n, padrão:n): ",
+        content="Modo debug completo? (s/n, padrão:n):",
         allowed_values=["s", "n"],
         default_value="n",
         invalid_message="Opção invalida!.",
     )
     modo_procurar_combinações = select_question(
-        content="Deseja procurar todas as combinações ou só a primeira? (s = todas / n = só 1, padrão:n): ",
+        content="Deseja procurar todas as combinações ou só a primeira? (s = todas / n = só 1, padrão:n):",
         allowed_values=["s", "n"],
         default_value="n",
         invalid_message="Opção invalida!.",
