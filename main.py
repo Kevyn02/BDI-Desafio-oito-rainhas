@@ -103,7 +103,7 @@ def posicionar_rainhas(
         - colunas usadas
         - diagonais
     """
-
+    tentativas = 0
     resultados = []
     resultados_set = set()
 
@@ -113,31 +113,60 @@ def posicionar_rainhas(
     diag2 = set()  # linha + coluna
 
     def salvar_resultado(rainhas_posicionadas):
+        nonlocal tentativas
         """Evita duplicidade e salva solução"""
         combinacao = tuple(sorted(rainhas_posicionadas))
         if combinacao not in resultados_set:
             log.info(
-                f"✔ Solução encontrada {str(len(resultados)+1).rjust(3, '0')}: {rainhas_posicionadas}"
+                f"✔ Tentativa {str(tentativas).rjust(3, '0')} - Solução encontrada {str(len(resultados)+1).rjust(3, '0')}: {rainhas_posicionadas}"
             )
             resultados_set.add(combinacao)
             resultados.append(list(combinacao))
 
     def pode_posicionar(linha, coluna, nivel):
+        nonlocal tentativas
         """
         Verifica se posição é válida:
         - coluna livre
         - diagonais livres
         """
-        if coluna in colunas_usadas:
-            debug(log, nivel, f"❌ Coluna ocupada ({linha+1},{coluna+1})")
+        sn_coluna_ocupada = coluna in colunas_usadas
+        debug(
+            log,
+            nivel,
+            (
+                f"❌ Tentativa {str(tentativas).rjust(3, '0')} - Coluna ocupada ({linha+1},{coluna+1})"
+                if sn_coluna_ocupada
+                else f"✅ Tentativa {str(tentativas).rjust(3, '0')} - Coluna livre ({linha+1},{coluna+1})"
+            ),
+        )
+        if sn_coluna_ocupada:
             return False
 
-        if (linha - coluna) in diag1:
-            debug(log, nivel, f"❌ Diagonal ↘ ocupada ({linha+1},{coluna+1})")
+        sn_diagonal_01 = (linha - coluna) in diag1
+        debug(
+            log,
+            nivel,
+            (
+                f"❌ Tentativa {str(tentativas).rjust(3, '0')} - Diagonal ↘ ocupada ({linha+1},{coluna+1})"
+                if sn_diagonal_01
+                else f"✅ Tentativa {str(tentativas).rjust(3, '0')} - Diagonal ↘ livre ({linha+1},{coluna+1})"
+            ),
+        )
+        if sn_diagonal_01:
             return False
 
-        if (linha + coluna) in diag2:
-            debug(log, nivel, f"❌ Diagonal ↗ ocupada ({linha+1},{coluna+1})")
+        sn_diagonal_02 = (linha + coluna) in diag2
+        debug(
+            log,
+            nivel,
+            (
+                f"❌ Tentativa {str(tentativas).rjust(3, '0')} - Diagonal ↗ ocupada ({linha+1},{coluna+1})"
+                if sn_diagonal_02
+                else f"✅ Tentativa {str(tentativas).rjust(3, '0')} - Diagonal ↗ livre ({linha+1},{coluna+1})"
+            ),
+        )
+        if sn_diagonal_02:
             return False
 
         debug(log, nivel, f"✅ Válido ({linha+1},{coluna+1})")
@@ -164,6 +193,8 @@ def posicionar_rainhas(
         diag2.remove(linha + coluna)
 
     def backtracking(linha, rainhas_posicionadas, nivel):
+        nonlocal tentativas
+
         """Função recursiva principal"""
         debug(log, nivel, f"🔍 Nível {nivel+1}")
 
@@ -176,6 +207,7 @@ def posicionar_rainhas(
             return False
 
         for coluna in range(qtd_colunas):
+            tentativas += 1
             debug(log, nivel, f"➡ Tentando ({linha+1},{coluna+1})")
 
             if not pode_posicionar(linha, coluna, nivel):
