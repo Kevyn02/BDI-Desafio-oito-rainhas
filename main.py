@@ -4,6 +4,7 @@ import string
 import logging
 from datetime import datetime
 from pathlib import Path
+import time  # ⏱️ controle de tempo
 
 
 # ================= LOG =================
@@ -16,7 +17,6 @@ def configurar_log(debug=False):
     base_dir.mkdir(parents=True, exist_ok=True)
 
     formato = "%(asctime)s - %(levelname)s - %(message)s"
-
     nivel = logging.DEBUG if debug else logging.INFO
 
     logging.basicConfig(
@@ -34,6 +34,12 @@ def configurar_log(debug=False):
 def log_debug(log, mensagem, nivel=0):
     indent = "  " * nivel
     log.debug(f"{indent}{mensagem}")
+
+
+def debug(log, nivel, msg):
+    """Evita custo de log quando não está em DEBUG"""
+    if log.isEnabledFor(logging.DEBUG):
+        log_debug(log, msg, nivel)
 
 
 # ================= INPUT =================
@@ -67,10 +73,12 @@ def faz_perguntas(log):
 
 # ================= TABULEIRO =================
 def criar_tabuleiro(qtd_linhas, qtd_colunas):
+    """Cria matriz vazia"""
     return [["-" for _ in range(qtd_colunas)] for _ in range(qtd_linhas)]
 
 
 def mostrar_tabuleiro(tabuleiro, qtd_colunas, log):
+    """Mostra o tabuleiro formatado"""
     letras = list(string.ascii_uppercase)
 
     header = "   " + " ".join(letras[:qtd_colunas])
@@ -82,144 +90,122 @@ def mostrar_tabuleiro(tabuleiro, qtd_colunas, log):
     log.info("")
 
 
-# ================= REGRAS =================
-def verifica_conteudo(tabuleiro, linha, coluna, log, nivel):
-    resultado = tabuleiro[linha][coluna] != "-"
-    texto_log = (
-        f"❌ Ocupado ({linha+1},{coluna+1})"
-        if resultado
-        else f"✅ Livre ({linha+1},{coluna+1})"
-    )
-    log_debug(log, texto_log, nivel)
-    return resultado
-
-
-def verifica_colisao_linha(tabuleiro, linha, log, nivel):
-    resultado = "R" in tabuleiro[linha]
-    texto_log = (
-        f"❌ Falha linha {linha+1}" if resultado else f"✅ Válido linha {linha+1}"
-    )
-    log_debug(log, texto_log, nivel)
-
-    return resultado
-
-
-def verifica_colisao_coluna(tabuleiro, coluna, log, nivel):
-    valores_coluna = [linha[coluna] for linha in tabuleiro]
-    resultado = "R" in valores_coluna
-    texto_log = (
-        f"❌ Falha coluna {coluna+1}" if resultado else f"✅ Válido coluna {coluna+1}"
-    )
-    log_debug(log, texto_log, nivel)
-    return resultado
-
-
-def verifica_colisao_diagonal(rainhas_posicionadas, linha, coluna, log, nivel):
-    resultado = False
-    for r_linha, r_coluna in rainhas_posicionadas:
-        if abs(r_linha - linha) == abs(r_coluna - coluna):
-            resultado = True
-    texto_log = (
-        f"❌ Falha diagonal ({linha+1},{coluna+1})"
-        if resultado
-        else f"✅ Válido diagonal ({linha+1},{coluna+1})"
-    )
-    log_debug(log, texto_log, nivel)
-
-    return resultado
-
-
-def pode_posicionar(tabuleiro, rainhas_posicionadas, linha, coluna, log, nivel):
-    if verifica_conteudo(tabuleiro, linha, coluna, log, nivel):
-        return False
-
-    if verifica_colisao_linha(tabuleiro, linha, log, nivel):
-        return False
-
-    if verifica_colisao_coluna(tabuleiro, coluna, log, nivel):
-        return False
-
-    if verifica_colisao_diagonal(rainhas_posicionadas, linha, coluna, log, nivel):
-        return False
-
-    log_debug(log, f"✅ Válido ({linha+1},{coluna+1})", nivel)
-    return True
-
-
-# ================= BACKTRACK =================
+# ================= BACKTRACKING =================
 def posicionar_rainhas(
     tabuleiro, qtd_linhas, qtd_colunas, qtd_rainhas, log, buscar_todas
 ):
+    """
+    Resolve o problema usando BACKTRACKING.
+
+    Estratégia:
+    - Tenta colocar uma rainha por linha
+    - Usa sets para validar em O(1):
+        - colunas usadas
+        - diagonais
+    """
+
     resultados = []
     resultados_set = set()
 
-    def backtracking(nivel, rainhas_posicionadas):
-        log_debug(log, f"🔍 Nível {nivel+1} iniciado", nivel)
+    # 🔥 Estruturas para validação rápida (O(1))
+    colunas_usadas = set()
+    diag1 = set()  # linha - coluna
+    diag2 = set()  # linha + coluna
 
-        if len(rainhas_posicionadas) == qtd_rainhas:
-            combinacao = tuple(sorted(rainhas_posicionadas))
+    def salvar_resultado(rainhas_posicionadas):
+        """Evita duplicidade e salva solução"""
+        combinacao = tuple(sorted(rainhas_posicionadas))
+        if combinacao not in resultados_set:
+            log.info(
+                f"✔ Solução encontrada {str(len(resultados)+1).rjust(3, '0')}: {rainhas_posicionadas}"
+            )
+            resultados_set.add(combinacao)
+            resultados.append(list(combinacao))
 
-            if combinacao not in resultados_set:
-                log.info(
-                    f"✔ Solução encontrada {str(len(resultados)+1).rjust(3, '0')}: {rainhas_posicionadas}"
-                )
-                resultados_set.add(combinacao)
-                resultados.append(list(combinacao))
-
-            if not buscar_todas:
-                return True
-
+    def pode_posicionar(linha, coluna, nivel):
+        """
+        Verifica se posição é válida:
+        - coluna livre
+        - diagonais livres
+        """
+        if coluna in colunas_usadas:
+            debug(log, nivel, f"❌ Coluna ocupada ({linha+1},{coluna+1})")
             return False
 
-        for linha in range(qtd_linhas):
-            if rainhas_posicionadas and verifica_colisao_linha(
-                tabuleiro, linha, log, nivel
-            ):
+        if (linha - coluna) in diag1:
+            debug(log, nivel, f"❌ Diagonal ↘ ocupada ({linha+1},{coluna+1})")
+            return False
+
+        if (linha + coluna) in diag2:
+            debug(log, nivel, f"❌ Diagonal ↗ ocupada ({linha+1},{coluna+1})")
+            return False
+
+        debug(log, nivel, f"✅ Válido ({linha+1},{coluna+1})")
+        return True
+
+    def colocar(linha, coluna, rainhas_posicionadas, nivel):
+        """Coloca rainha e atualiza estado"""
+        debug(log, nivel, f"👑 Colocando ({linha+1},{coluna+1})")
+
+        tabuleiro[linha][coluna] = "R"
+        rainhas_posicionadas.append((linha, coluna))
+        colunas_usadas.add(coluna)
+        diag1.add(linha - coluna)
+        diag2.add(linha + coluna)
+
+    def remover(linha, coluna, rainhas_posicionadas, nivel):
+        """Remove rainha (backtracking)"""
+        debug(log, nivel, f"↩ Removendo ({linha+1},{coluna+1})")
+
+        tabuleiro[linha][coluna] = "-"
+        rainhas_posicionadas.pop()
+        colunas_usadas.remove(coluna)
+        diag1.remove(linha - coluna)
+        diag2.remove(linha + coluna)
+
+    def backtracking(linha, rainhas_posicionadas, nivel):
+        """Função recursiva principal"""
+        debug(log, nivel, f"🔍 Nível {nivel+1}")
+
+        # 🎯 condição de parada
+        if len(rainhas_posicionadas) == qtd_rainhas:
+            salvar_resultado(rainhas_posicionadas)
+            return not buscar_todas
+
+        if linha >= qtd_linhas:
+            return False
+
+        for coluna in range(qtd_colunas):
+            debug(log, nivel, f"➡ Tentando ({linha+1},{coluna+1})")
+
+            if not pode_posicionar(linha, coluna, nivel):
                 continue
 
-            for coluna in range(qtd_colunas):
-                if rainhas_posicionadas and verifica_colisao_coluna(
-                    tabuleiro, coluna, log, nivel
-                ):
-                    continue
+            colocar(linha, coluna, rainhas_posicionadas, nivel)
 
-                if pode_posicionar(
-                    tabuleiro,
-                    rainhas_posicionadas,
-                    linha,
-                    coluna,
-                    log,
-                    nivel,
-                ):
-                    tabuleiro[linha][coluna] = "R"
-                    rainhas_posicionadas.append((linha, coluna))
+            if backtracking(linha + 1, rainhas_posicionadas, nivel + 1):
+                return True
 
-                    parar = backtracking(nivel + 1, rainhas_posicionadas)
-
-                    if parar:
-                        return True
-
-                    tabuleiro[linha][coluna] = "-"
-                    rainhas_posicionadas.pop()
+            remover(linha, coluna, rainhas_posicionadas, nivel)
 
         return False
 
-    backtracking(0, [])
+    backtracking(0, [], 0)
     return resultados
 
 
 # ================= RESULTADOS =================
 def mostrar_resultados(resultados, qtd_linhas, qtd_colunas, log):
+    letras = list(string.ascii_uppercase)
+
     for indice, combinacao in enumerate(resultados, start=1):
-        resultado = []
         tabuleiro = [["-" for _ in range(qtd_colunas)] for _ in range(qtd_linhas)]
-        letras = list(string.ascii_uppercase)
+        resultado = []
 
         for linha, coluna in combinacao:
             tabuleiro[linha][coluna] = "R"
-            # resultado = resultado + [(linha + 1, coluna + 1)]
-            resultado = resultado + [f"{letras[coluna]}{linha+1}"]
-        # log.info(f"\n=== Combinação {indice} : {resultado} ===")
+            resultado.append(f"{letras[coluna]}{linha+1}")
+
         log.info(f"\n=== Combinação {str(indice).rjust(3, '0')} : {resultado} ===")
 
         header = "- " + " ".join(letras[:qtd_colunas])
@@ -237,12 +223,14 @@ def main():
         default_value="n",
         invalid_message="Opção invalida!.",
     )
-    modo_procurar_combinações = select_question(
-        content="Deseja procurar todas as combinações ou só a primeira? (s = todas / n = só 1, padrão:n):",
+
+    modo_procurar = select_question(
+        content="Deseja todas combinações? (s/n, padrão:n):",
         allowed_values=["s", "n"],
         default_value="n",
         invalid_message="Opção invalida!.",
     )
+
     log = configurar_log(debug=(modo_debug == "s"))
 
     qtd_linhas, qtd_colunas, qtd_rainhas = faz_perguntas(log)
@@ -252,16 +240,23 @@ def main():
     log.info("Tabuleiro inicial:")
     mostrar_tabuleiro(tabuleiro, qtd_colunas, log)
 
+    # ⏱️ INÍCIO DO TEMPO
+    inicio = time.perf_counter()
+
     resultados = posicionar_rainhas(
         tabuleiro,
         qtd_linhas,
         qtd_colunas,
         qtd_rainhas,
         log,
-        buscar_todas=(modo_procurar_combinações == "s"),
+        buscar_todas=(modo_procurar == "s"),
     )
 
+    # ⏱️ FIM DO TEMPO
+    fim = time.perf_counter()
+
     log.info(f"\nTotal de combinações: {len(resultados)}")
+    log.info(f"⏱️ Tempo de execução: {fim - inicio:.6f} segundos")
 
     mostrar_resultados(resultados, qtd_linhas, qtd_colunas, log)
 
